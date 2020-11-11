@@ -11,12 +11,14 @@ import argparse
 
 import cv2
 import pycuda.autoinit  # This is needed for initializing CUDA driver
+
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from progressbar import progressbar
 
-from utils.yolo import TrtYOLO
+from utils.yolo_with_plugins import TrtYOLO
 from utils.yolo_classes import yolo_cls_to_ssd
+
 
 
 HOME = os.environ['HOME']
@@ -38,7 +40,10 @@ def parse_args():
         '--non_coco', action='store_true',
         help='don\'t do coco class translation [False]')
     parser.add_argument(
-        '--model', type=str, required=True,
+        '-c', '--category_num', type=int, default=80,
+        help='number of object categories [80]')
+    parser.add_argument(
+        '-m', '--model', type=str, required=True,
         help=('[yolov3|yolov3-tiny|yolov3-spp|yolov4|yolov4-tiny]-'
               '[{dimension}], where dimension could be a single '
               'number (e.g. 288, 416, 608) or WxH (e.g. 416x256)'))
@@ -66,6 +71,7 @@ def generate_results(trt_yolo, imgs_dir, jpgs, results_file, non_coco):
             y = float(box[1])
             w = float(box[2] - box[0] + 1)
             h = float(box[3] - box[1] + 1)
+            cls = int(cls)
             cls = cls if non_coco else yolo_cls_to_ssd[cls]
             results.append({'image_id': image_id,
                             'category_id': cls,
@@ -80,8 +86,8 @@ def main():
     check_args(args)
 
     results_file = 'yolo/results_%s.json' % args.model
-    yolo_dim = int(args.model.split('-')[-1])  # 416 or 608
-    trt_yolo = TrtYOLO(args.model, (yolo_dim, yolo_dim))
+    yolo_dim = int(args.model.split('-')[-1])  # 288, 416 or 608
+    trt_yolo = TrtYOLO(args.model, (yolo_dim, yolo_dim), args.category_num)
 
     jpgs = [j for j in os.listdir(args.imgs_dir) if j.endswith('.jpg')]
     generate_results(trt_yolo, args.imgs_dir, jpgs, results_file,
